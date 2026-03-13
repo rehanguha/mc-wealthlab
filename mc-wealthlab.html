@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MonteCarlo Wealth Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ── RESET & TOKENS ───────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #07080f;
+    --bg2:       #0d0f1e;
+    --bg3:       #111527;
+    --border:    #1e2340;
+    --border2:   #2a3058;
+    --text:      #d8ddf5;
+    --muted:     #4a5280;
+    --muted2:    #6b75a8;
+    --amber:     #f0a500;
+    --amber2:    #ffc844;
+    --blue:      #3d8ef0;
+    --blue2:     #6aaeff;
+    --green:     #10c98f;
+    --green2:    #3dffc0;
+    --red:       #f03d5e;
+    --orange:    #f07830;
+    --yellow:    #e8c030;
+    --teal:      #10b8c9;
+    --purple:    #8b6af0;
+    --font-ui:   'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius:    10px;
+    --radius-sm: 6px;
+  }
+
+  html { font-size: 14px; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCROLLBAR ─────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── LAYOUT ────────────────────────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-rows: 56px 1fr;
+    grid-template-columns: 360px 1fr;
+    height: 100vh;
+  }
+
+  /* ── TOPBAR ────────────────────────────────────────────── */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--amber);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--amber), var(--orange));
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .topbar-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: .05em;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 20px; }
+  .kpi-pill {
+    display: flex; flex-direction: column; align-items: flex-end;
+    gap: 1px;
+  }
+  .kpi-pill .label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+  .kpi-pill .value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; }
+
+  .btn-run {
+    padding: 9px 24px;
+    background: linear-gradient(135deg, var(--amber), var(--orange));
+    border: none; border-radius: var(--radius-sm);
+    color: #000; font-family: var(--font-ui);
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex; align-items: center; gap: 8px;
+    white-space: nowrap;
+  }
+  .btn-run:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(240,165,0,.3); }
+  .btn-run:active { transform: translateY(0); }
+  .btn-run:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn-run .spinner {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(0,0,0,.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .btn-run.running .spinner { display: block; }
+  .btn-run.running .btn-text::before { content: 'RUNNING…'; }
+  .btn-run:not(.running) .btn-text::before { content: '▶ RUN SIMULATION'; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── SIDEBAR ───────────────────────────────────────────── */
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding-bottom: 40px;
+  }
+
+  .section-hdr {
+    padding: 14px 18px 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .2em;
+    color: var(--amber);
+    text-transform: uppercase;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+  .section-hdr:first-child { border-top: none; margin-top: 0; }
+
+  .field { padding: 5px 18px; }
+  .field-label {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 4px;
+  }
+  .field-label span:first-child {
+    font-size: 11px; color: var(--muted2); letter-spacing: .02em;
+  }
+  .field-value {
+    font-family: var(--font-mono);
+    font-size: 12px; font-weight: 700; color: var(--amber);
+  }
+  .field-input-row {
+    display: flex; gap: 12px; align-items: center;
+  }
+  .field-input-row input[type="number"] {
+    width: 80px; padding: 6px 8px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px;
+    text-align: right;
+  }
+  .field-input-row input[type="number"]:focus {
+    outline: none; border-color: var(--amber);
+    box-shadow: 0 0 0 2px rgba(240,165,0,.2);
+  }
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--amber);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(240,165,0,.5);
+    transition: transform .1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+  /* ── WEIGHT INDICATOR ──────────────────────────────────── */
+  .weight-bar-wrap { padding: 8px 18px 4px; }
+  .weight-bar-track {
+    height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden; position: relative;
+  }
+  .weight-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width .3s, background .3s;
+  }
+  .weight-label {
+    display: flex; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 10px; margin-top: 4px;
+  }
+
+  /* ── FUND CARDS ────────────────────────────────────────── */
+  .fund-list { padding: 0 12px; }
+  .fund-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .fund-card:hover { border-color: var(--border2); }
+  .fund-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .fund-card-head:hover { background: rgba(255,255,255,.02); }
+  .fund-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0; margin-right: 8px;
+  }
+  .fund-name-input {
+    background: none; border: none; outline: none;
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+    color: var(--text); width: 100%;
+    cursor: text;
+  }
+  .fund-name-input:focus { color: var(--blue2); }
+  .fund-head-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .fund-weight-badge {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    background: rgba(240,165,0,.15); color: var(--amber);
+  }
+  .fund-toggle { color: var(--muted); font-size: 10px; transition: transform .2s; }
+  .fund-card.open .fund-toggle { transform: rotate(180deg); }
+  .fund-body {
+    display: none;
+    padding: 4px 12px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .fund-card.open .fund-body { display: block; }
+  .fund-del {
+    width: 100%; margin-top: 8px; padding: 6px;
+    background: rgba(240,61,94,.1); border: 1px solid rgba(240,61,94,.2);
+    border-radius: var(--radius-sm); color: var(--red);
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    transition: all .2s; letter-spacing: .05em;
+  }
+  .fund-del:hover { background: rgba(240,61,94,.2); }
+
+  .btn-add-fund {
+    width: calc(100% - 24px); margin: 8px 12px;
+    padding: 9px; background: rgba(61,142,240,.1);
+    border: 1px dashed rgba(61,142,240,.3); border-radius: var(--radius);
+    color: var(--blue2); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all .2s; letter-spacing: .05em;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-add-fund:hover { background: rgba(61,142,240,.18); border-color: var(--blue); }
+
+  /* ── MAIN PANEL ────────────────────────────────────────── */
+  .main {
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── EMPTY STATE ───────────────────────────────────────── */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; color: var(--muted);
+    text-align: center;
+  }
+  .empty-icon { font-size: 48px; opacity: .4; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--muted2); }
+  .empty-sub { font-size: 12px; line-height: 1.6; max-width: 320px; }
+
+  /* ── KPI ROW ───────────────────────────────────────────── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 14px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent, var(--amber));
+    opacity: .6;
+  }
+  .kpi-card .lbl {
+    font-size: 9px; color: var(--muted);
+    letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .kpi-card .val {
+    font-family: var(--font-mono); font-size: 17px; font-weight: 700;
+    line-height: 1; color: var(--accent, var(--amber));
+  }
+  .kpi-card .sub {
+    font-size: 9px; color: var(--muted); margin-top: 4px; line-height: 1.4;
+  }
+
+  /* ── CHART PANELS ──────────────────────────────────────── */
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-title {
+    font-size: 10px; font-weight: 600; color: var(--muted2);
+    letter-spacing: .12em; text-transform: uppercase; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::before {
+    content: '';
+    width: 3px; height: 12px;
+    background: var(--amber); border-radius: 2px;
+  }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* Fixed chart dimensions */
+  .chart-fan-container {
+    height: 320px;
+    position: relative;
+    min-height: 320px;
+  }
+  
+  .chart-hist-container {
+    height: 280px;
+    position: relative;
+    min-height: 280px;
+  }
+  
+  .chart-prob-container {
+    height: 280px;
+    position: relative;
+    min-height: 280px;
+  }
+  
+  .chart-container {
+    height: 240px;
+    position: relative;
+    min-height: 240px;
+  }
+
+  canvas { display: block; }
+
+  /* ── MILESTONE TABLE ───────────────────────────────────── */
+  .ms-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 11px; font-family: var(--font-mono);
+  }
+  .ms-table thead tr {
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .ms-table th {
+    padding: 8px 12px; text-align: right;
+    color: var(--muted); font-size: 9px;
+    letter-spacing: .08em; font-weight: 600;
+    white-space: nowrap;
+  }
+  .ms-table th:first-child { text-align: left; }
+  .ms-table td {
+    padding: 9px 12px; text-align: right;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .ms-table td:first-child { text-align: left; font-weight: 700; }
+  .ms-table tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
+  .ms-table tbody tr:hover { background: rgba(240,165,0,.05); }
+
+  /* ── PROB + DIST ───────────────────────────────────────── */
+  .bot-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .prob-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+  }
+  .prob-table th {
+    padding: 6px 10px; text-align: right;
+    color: var(--muted); font-size: 9px;
+    font-family: var(--font-mono); letter-spacing: .06em;
+    border-bottom: 1px solid var(--border); font-weight: 600;
+  }
+  .prob-table th:first-child { text-align: left; }
+  .prob-table td {
+    padding: 7px 10px; text-align: right;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .prob-table td:first-child { text-align: left; color: var(--text); }
+  .prob-table tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
+
+  /* ── DIST BAR ──────────────────────────────────────────── */
+  .dist-item { margin-bottom: 11px; }
+  .dist-row {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 4px;
+  }
+  .dist-label { font-size: 10px; color: var(--muted2); }
+  .dist-pct { font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+  .dist-track {
+    height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden;
+  }
+  .dist-fill {
+    height: 100%; border-radius: 3px;
+    transition: width .8s cubic-bezier(.4,0,.2,1);
+  }
+
+  /* ── DOWNSIDE ──────────────────────────────────────────── */
+  .ds-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .ds-row:last-child { border-bottom: none; }
+  .ds-label { color: var(--muted); }
+  .ds-val { font-family: var(--font-mono); font-weight: 700; font-size: 12px; }
+
+  /* ── PROGRESS OVERLAY ──────────────────────────────────── */
+  .progress-wrap {
+    padding: 6px 18px 10px;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-track {
+    height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--amber), var(--orange));
+    border-radius: 2px; width: 0%;
+    transition: width .1s linear;
+  }
+  .progress-label {
+    font-family: var(--font-mono); font-size: 9px; color: var(--muted);
+    margin-top: 4px; text-align: center;
+  }
+
+  /* ── VALIDATION & ERROR SYSTEM ─────────────────────────── */
+  .validation-wrap {
+    padding: 8px 18px 4px;
+    display: none;
+  }
+  .validation-wrap.visible { display: block; }
+  .validation-track {
+    height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden; position: relative;
+  }
+  .validation-fill {
+    height: 100%; border-radius: 3px;
+    transition: width .3s, background .3s;
+  }
+  .validation-label {
+    display: flex; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 10px; margin-top: 4px;
+  }
+  .error-display {
+    padding: 10px 16px;
+    background: rgba(240,61,94,.1);
+    border: 1px solid rgba(240,61,94,.3);
+    border-radius: var(--radius);
+    margin: 8px 16px;
+    display: none;
+  }
+  .error-display.visible { display: block; }
+  .error-display h4 {
+    margin: 0 0 6px 0;
+    color: var(--red);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .error-display p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .warning-display {
+    padding: 10px 16px;
+    background: rgba(240,165,0,.1);
+    border: 1px solid rgba(240,165,0,.3);
+    border-radius: var(--radius);
+    margin: 8px 16px;
+    display: none;
+  }
+  .warning-display.visible { display: block; }
+  .warning-display h4 {
+    margin: 0 0 6px 0;
+    color: var(--amber);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .warning-display p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .success-display {
+    padding: 10px 16px;
+    background: rgba(16,201,143,.1);
+    border: 1px solid rgba(16,201,143,.3);
+    border-radius: var(--radius);
+    margin: 8px 16px;
+    display: none;
+  }
+  .success-display.visible { display: block; }
+  .success-display h4 {
+    margin: 0 0 6px 0;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .success-display p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  /* ── DISCLAIMER ────────────────────────────────────────── */
+  .disclaimer {
+    padding: 12px 16px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 9px; color: var(--muted); line-height: 1.7;
+  }
+
+  /* ── RESPONSIVE NUDGE ──────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .bot-row { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr; }
+    .sidebar { max-height: 45vh; }
+    .charts-row, .bot-row { grid-template-columns: 1fr; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══════════════════ TOPBAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">
+        <div class="logo-icon">◈</div>
+        MonteCarlo Wealth Lab
+      </div>
+      <div class="topbar-meta" id="topbar-meta">Configure portfolio → Run simulation</div>
+    </div>
+    <div class="topbar-right">
+      <div class="kpi-pill">
+        <span class="label">Blended μ</span>
+        <span class="value" id="hdr-mu" style="color:var(--green)">—</span>
+      </div>
+      <div class="kpi-pill">
+        <span class="label">Weight</span>
+        <span class="value" id="hdr-wt" style="color:var(--amber)">100%</span>
+      </div>
+      <div class="kpi-pill">
+        <span class="label">Monthly Out</span>
+        <span class="value" id="hdr-out" style="color:var(--blue2)">—</span>
+      </div>
+      <button class="btn-run" id="btn-run" onclick="startSimulation()">
+        <div class="spinner"></div>
+        <span class="btn-text"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="section-hdr">⚙ Simulation</div>
+    <div class="field">
+      <div class="field-label"><span>Simulations</span><span class="field-value" id="lbl-sims">5,000</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-sims" min="500" max="50000" step="500" value="5000" oninput="syncLabel('sims',this.value,v=>v.toLocaleString());syncInput('sims',this.value)">
+        <input type="number" id="in-sims" min="500" max="50000" step="500" value="5000" oninput="syncSlider('sims',this.value);syncLabel('sims',this.value,v=>v.toLocaleString())">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Current Age</span><span class="field-value" id="lbl-age">30</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-age" min="20" max="50" step="1" value="30" oninput="syncLabel('age',this.value);updateSimulationYears();syncInput('age',this.value)">
+        <input type="number" id="in-age" min="20" max="50" step="1" value="30" oninput="syncSlider('age',this.value);syncLabel('age',this.value);updateSimulationYears()">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Target Age</span><span class="field-value" id="lbl-tage">60</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-tage" min="30" max="65" step="1" value="60" oninput="syncLabel('tage',this.value);updateSimulationYears();syncInput('tage',this.value)">
+        <input type="number" id="in-tage" min="30" max="65" step="1" value="60" oninput="syncSlider('tage',this.value);syncLabel('tage',this.value);updateSimulationYears()">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Simulation Years</span><span class="field-value" id="lbl-years">14</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-years" min="5" max="25" step="1" value="14" oninput="syncLabel('years',this.value);syncInput('years',this.value)" disabled>
+        <input type="number" id="in-years" min="5" max="25" step="1" value="14" oninput="syncSlider('years',this.value);syncLabel('years',this.value)" disabled>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Random Seed</span><span class="field-value" id="lbl-seed">42</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-seed" min="1" max="999" step="1" value="42" oninput="syncLabel('seed',this.value);syncInput('seed',this.value)">
+        <input type="number" id="in-seed" min="1" max="999" step="1" value="42" oninput="syncSlider('seed',this.value);syncLabel('seed',this.value)">
+      </div>
+    </div>
+
+    <div class="section-hdr">💰 Starting Position</div>
+    <div class="field">
+      <div class="field-label"><span>Corpus (₹L)</span><span class="field-value" id="lbl-corpus">0</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-corpus" min="0" max="300" step="1" value="0" oninput="syncLabel('corpus',this.value,v=>'₹'+v+'L');syncInput('corpus',this.value)">
+        <input type="number" id="in-corpus" min="0" max="300" step="1" value="0" oninput="syncSlider('corpus',this.value);syncLabel('corpus',this.value,v=>'₹'+v+'L')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>War Chest Initial (₹L)</span><span class="field-value" id="lbl-wci">0</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-wci" min="0" max="100" step="1" value="0" oninput="syncLabel('wci',this.value,v=>'₹'+v+'L');syncInput('wci',this.value)">
+        <input type="number" id="in-wci" min="0" max="100" step="1" value="0" oninput="syncSlider('wci',this.value);syncLabel('wci',this.value,v=>'₹'+v+'L')">
+      </div>
+    </div>
+
+    <div class="section-hdr">📅 Monthly SIP</div>
+    <div class="field">
+      <div class="field-label"><span>Base SIP (₹K)</span><span class="field-value" id="lbl-sip">0</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-sip" min="0" max="300" step="5" value="0" oninput="syncLabel('sip',this.value,v=>'₹'+v+'K');updateHeader();syncInput('sip',this.value)">
+        <input type="number" id="in-sip" min="0" max="300" step="5" value="0" oninput="syncSlider('sip',this.value);syncLabel('sip',this.value,v=>'₹'+v+'K');updateHeader()">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Step-up Rate %</span><span class="field-value" id="lbl-stepup">10</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-stepup" min="0" max="30" step="1" value="10" oninput="syncLabel('stepup',this.value,v=>v+'%');syncInput('stepup',this.value)">
+        <input type="number" id="in-stepup" min="0" max="30" step="1" value="10" oninput="syncSlider('stepup',this.value);syncLabel('stepup',this.value,v=>v+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Step-up Every (months)</span><span class="field-value" id="lbl-stepm">12</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-stepm" min="6" max="24" step="6" value="12" oninput="syncLabel('stepm',this.value);syncInput('stepm',this.value)">
+        <input type="number" id="in-stepm" min="6" max="24" step="6" value="12" oninput="syncSlider('stepm',this.value);syncLabel('stepm',this.value)">
+      </div>
+    </div>
+
+    <div class="section-hdr">🏦 War Chest</div>
+    <div class="field">
+      <div class="field-label"><span>Monthly Addition (₹K)</span><span class="field-value" id="lbl-wcm">25</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-wcm" min="0" max="150" step="5" value="25" oninput="syncLabel('wcm',this.value,v=>'₹'+v+'K');updateHeader();syncInput('wcm',this.value)">
+        <input type="number" id="in-wcm" min="0" max="150" step="5" value="25" oninput="syncSlider('wcm',this.value);syncLabel('wcm',this.value,v=>'₹'+v+'K');updateHeader()">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Parking Return %</span><span class="field-value" id="lbl-wcp">7.0</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-wcp" min="3" max="12" step="0.5" value="7" oninput="syncLabel('wcp',this.value,v=>parseFloat(v).toFixed(1)+'%');syncInput('wcp',this.value)">
+        <input type="number" id="in-wcp" min="3" max="12" step="0.5" value="7" oninput="syncSlider('wcp',this.value);syncLabel('wcp',this.value,v=>parseFloat(v).toFixed(1)+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Cooldown (months)</span><span class="field-value" id="lbl-wcc">6</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-wcc" min="1" max="18" step="1" value="6" oninput="syncLabel('wcc',this.value);syncInput('wcc',this.value)">
+        <input type="number" id="in-wcc" min="1" max="18" step="1" value="6" oninput="syncSlider('wcc',this.value);syncLabel('wcc',this.value)">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Deploy at −5%</span><span class="field-value" id="lbl-d5">20%</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-d5" min="0" max="100" step="5" value="20" oninput="syncLabel('d5',this.value,v=>v+'%');syncInput('d5',this.value)">
+        <input type="number" id="in-d5" min="0" max="100" step="5" value="20" oninput="syncSlider('d5',this.value);syncLabel('d5',this.value,v=>v+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Deploy at −10%</span><span class="field-value" id="lbl-d10">45%</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-d10" min="0" max="100" step="5" value="45" oninput="syncLabel('d10',this.value,v=>v+'%');syncInput('d10',this.value)">
+        <input type="number" id="in-d10" min="0" max="100" step="5" value="45" oninput="syncSlider('d10',this.value);syncLabel('d10',this.value,v=>v+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Deploy at −20%</span><span class="field-value" id="lbl-d20">75%</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-d20" min="0" max="100" step="5" value="75" oninput="syncLabel('d20',this.value,v=>v+'%');syncInput('d20',this.value)">
+        <input type="number" id="in-d20" min="0" max="100" step="5" value="75" oninput="syncSlider('d20',this.value);syncLabel('d20',this.value,v=>v+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Deploy at −30%</span><span class="field-value" id="lbl-d30">100%</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-d30" min="0" max="100" step="5" value="100" oninput="syncLabel('d30',this.value,v=>v+'%');syncInput('d30',this.value)">
+        <input type="number" id="in-d30" min="0" max="100" step="5" value="100" oninput="syncSlider('d30',this.value);syncLabel('d30',this.value,v=>v+'%')">
+      </div>
+    </div>
+
+    <div class="section-hdr">🧾 Tax & Inflation</div>
+    <div class="field">
+      <div class="field-label"><span>LTCG Rate %</span><span class="field-value" id="lbl-ltcg">12.5</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-ltcg" min="5" max="30" step="0.5" value="12.5" oninput="syncLabel('ltcg',this.value,v=>parseFloat(v).toFixed(1)+'%');syncInput('ltcg',this.value)">
+        <input type="number" id="in-ltcg" min="5" max="30" step="0.5" value="12.5" oninput="syncSlider('ltcg',this.value);syncLabel('ltcg',this.value,v=>parseFloat(v).toFixed(1)+'%')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Annual Exemption (₹K)</span><span class="field-value" id="lbl-exempt">125</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-exempt" min="0" max="500" step="25" value="125" oninput="syncLabel('exempt',this.value,v=>'₹'+v+'K');syncInput('exempt',this.value)">
+        <input type="number" id="in-exempt" min="0" max="500" step="25" value="125" oninput="syncSlider('exempt',this.value);syncLabel('exempt',this.value,v=>'₹'+v+'K')">
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Inflation Rate %</span><span class="field-value" id="lbl-infl">6.0</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-infl" min="2" max="15" step="0.5" value="6" oninput="syncLabel('infl',this.value,v=>parseFloat(v).toFixed(1)+'%');syncInput('infl',this.value)">
+        <input type="number" id="in-infl" min="2" max="15" step="0.5" value="6" oninput="syncSlider('infl',this.value);syncLabel('infl',this.value,v=>parseFloat(v).toFixed(1)+'%')">
+      </div>
+    </div>
+
+    <div class="section-hdr">🎯 Target</div>
+    <div class="field">
+      <div class="field-label"><span>Target Corpus (₹Cr)</span><span class="field-value" id="lbl-tgt">10</span></div>
+      <div class="field-input-row">
+        <input type="range" id="sl-tgt" min="1" max="50" step="1" value="10" oninput="syncLabel('tgt',this.value,v=>'₹'+v+'Cr');syncInput('tgt',this.value)">
+        <input type="number" id="in-tgt" min="1" max="50" step="1" value="10" oninput="syncSlider('tgt',this.value);syncLabel('tgt',this.value,v=>'₹'+v+'Cr')">
+      </div>
+    </div>
+
+    <!-- ── FUND SECTION ── -->
+    <div class="section-hdr">📈 Funds</div>
+
+    <div class="weight-bar-wrap">
+      <div class="weight-bar-track">
+        <div class="weight-bar-fill" id="wt-fill" style="width:100%;background:var(--green)"></div>
+      </div>
+      <div class="weight-label">
+        <span style="color:var(--muted)">Total Weight</span>
+        <span id="wt-total" style="color:var(--green);font-weight:700">100%</span>
+      </div>
+    </div>
+
+    <div class="fund-list" id="fund-list"></div>
+    <button class="btn-add-fund" onclick="addFund()">＋ Add Fund</button>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-label" id="progress-label">Preparing…</div>
+    </div>
+
+    <!-- Validation & Error System -->
+    <div class="validation-wrap" id="validation-wrap">
+      <div class="validation-track"><div class="validation-fill" id="validation-fill"></div></div>
+      <div class="validation-label">
+        <span style="color:var(--muted)">Input Validation</span>
+        <span id="validation-status" style="color:var(--green)">Valid</span>
+      </div>
+    </div>
+
+    <div class="error-display" id="error-display">
+      <h4>⚠ Input Error</h4>
+      <p id="error-message">Please check your inputs and try again.</p>
+    </div>
+
+    <div class="warning-display" id="warning-display">
+      <h4>⚠ Warning</h4>
+      <p id="warning-message">Some inputs may need attention.</p>
+    </div>
+
+    <div class="success-display" id="success-display">
+      <h4>✓ Ready to Run</h4>
+      <p id="success-message">All inputs are valid. You can now run the simulation.</p>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main class="main" id="main-panel">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">◈</div>
+      <div class="empty-title">Simulation Ready</div>
+      <div class="empty-sub">Configure your portfolio in the sidebar — adjust SIP, war chest, fund allocations — then hit RUN SIMULATION to see 5,000+ Monte Carlo paths.</div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const PALETTE = [
+  '#f0a500','#3d8ef0','#10c98f','#f03d5e','#8b6af0',
+  '#f07830','#10b8c9','#e8c030','#c0e840','#f070c0',
+];
+
+let funds = [
+  { id:1, name:'Fund 1', weight:20, mean:12.0, std:18.0 },
+  { id:2, name:'Fund 2', weight:20, mean:14.0, std:22.0 },
+  { id:3, name:'Fund 3', weight:20, mean:10.0, std:15.0 },
+  { id:4, name:'Fund 4', weight:20, mean:8.0,  std:12.0 },
+  { id:5, name:'Fund 5', weight:20, mean:6.0,  std:8.0 },
+];
+let nextId = 6;
+let charts = {};
+let simRunning = false;
+
+// Correlation matrix — expandable up to 10 funds
+const BASE_CORR = [
+  [1.00,0.82,0.65,0.25,0.75,0.70,0.60,0.55,0.50,0.45],
+  [0.82,1.00,0.70,0.28,0.85,0.75,0.65,0.60,0.55,0.50],
+  [0.65,0.70,1.00,0.55,0.72,0.68,0.60,0.55,0.50,0.45],
+  [0.25,0.28,0.55,1.00,0.30,0.35,0.40,0.45,0.30,0.25],
+  [0.75,0.85,0.72,0.30,1.00,0.78,0.68,0.62,0.57,0.52],
+  [0.70,0.75,0.68,0.35,0.78,1.00,0.72,0.66,0.60,0.55],
+  [0.60,0.65,0.60,0.40,0.68,0.72,1.00,0.70,0.64,0.58],
+  [0.55,0.60,0.55,0.45,0.62,0.66,0.70,1.00,0.68,0.62],
+  [0.50,0.55,0.50,0.30,0.57,0.60,0.64,0.68,1.00,0.72],
+  [0.45,0.50,0.45,0.25,0.52,0.55,0.58,0.62,0.72,1.00],
+];
+
+function getCorr(n) {
+  return BASE_CORR.slice(0,n).map(r=>r.slice(0,n));
+}
+
+function calculateMilestoneMonths(currentAge, targetAge, simYears) {
+  const totalM = simYears*12;
+  const targetM = Math.min((targetAge-currentAge)*12, totalM);
+  
+  // Calculate milestone ages based on current age and target age
+  const milestoneAges = [];
+  const steps = [0.2, 0.5, 0.8, 1.0]; // 20%, 50%, 80%, 100% of the way
+  
+  steps.forEach(step => {
+    const milestoneAge = Math.round(currentAge + step * (targetAge - currentAge));
+    milestoneAges.push(milestoneAge);
+  });
+  
+  // Convert ages to months, ensuring we don't exceed totalM
+  return milestoneAges.map(age => {
+    const months = Math.min((age - currentAge) * 12, totalM);
+    return Math.max(0, months);
+  });
+}
+
+// Update simulation years based on age difference
+function updateSimulationYears() {
+  const currentAge = v('sl-age');
+  const targetAge = v('sl-tage');
+  
+  // Validate age inputs
+  if (targetAge <= currentAge) {
+    alert('Target Age must be greater than Current Age');
+    return;
+  }
+  
+  const years = targetAge - currentAge;
+  
+  // Update the simulation years slider
+  const yearsSlider = document.getElementById('sl-years');
+  yearsSlider.value = years;
+  yearsSlider.disabled = false; // Enable the slider to show the calculated value
+  
+  // Update the label
+  syncLabel('years', years);
+  
+  // Update header to show the calculated years
+  document.getElementById('topbar-meta').textContent = 
+    `Simulation will run for ${years} years (${currentAge} → ${targetAge})`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  VALIDATION SYSTEM
+// ═══════════════════════════════════════════════════════════
+const v = id => +document.getElementById(id).value;
+const cr = x => '₹'+(x/1e7).toFixed(2)+'Cr';
+const crS = x => '₹'+(x/1e7).toFixed(1)+'Cr';
+
+// Validation state
+let validationState = {
+  isValid: true,
+  hasWarnings: false,
+  errors: [],
+  warnings: []
+};
+
+function validateInputs() {
+  const errors = [];
+  const warnings = [];
+  
+  // Age validation
+  const currentAge = v('sl-age');
+  const targetAge = v('sl-tage');
+  if (targetAge <= currentAge) {
+    errors.push('Target Age must be greater than Current Age');
+  }
+  if (currentAge < 18 || currentAge > 70) {
+    warnings.push('Current Age is outside typical retirement planning range (18-70)');
+  }
+  if (targetAge < 25 || targetAge > 80) {
+    warnings.push('Target Age is outside typical retirement planning range (25-80)');
+  }
+  
+  // Simulation parameters
+  const sims = v('sl-sims');
+  if (sims < 100) {
+    errors.push('Simulations should be at least 100 for meaningful results');
+  }
+  if (sims > 100000) {
+    warnings.push('Very high simulation count may cause performance issues');
+  }
+  
+  // Financial inputs
+  const corpus = v('sl-corpus') * 100000;
+  const wcInit = v('sl-wci') * 100000;
+  const sip = v('sl-sip') * 1000;
+  const wcMonthly = v('sl-wcm') * 1000;
+  const targetCorpus = v('sl-tgt') * 1e7;
+  
+  if (corpus < 0) errors.push('Starting Corpus cannot be negative');
+  if (wcInit < 0) errors.push('War Chest Initial cannot be negative');
+  if (sip < 0) errors.push('Monthly SIP cannot be negative');
+  if (wcMonthly < 0) errors.push('War Chest Monthly Addition cannot be negative');
+  if (targetCorpus <= 0) errors.push('Target Corpus must be positive');
+  
+  // Check if target is unrealistic
+  const totalMonthly = sip + wcMonthly;
+  const years = targetAge - currentAge;
+  const maxPossible = corpus * Math.pow(1.2, years) + totalMonthly * 12 * years * 2; // Very optimistic estimate
+  if (targetCorpus > maxPossible * 1.5) {
+    warnings.push('Target Corpus may be unrealistic given current inputs');
+  }
+  
+  // Fund validation
+  const totalWeight = funds.reduce((s,f)=>s+f.weight,0);
+  if (Math.abs(totalWeight - 100) > 1) {
+    errors.push(`Fund weights sum to ${totalWeight.toFixed(1)}% (must be 100%)`);
+  }
+  
+  // Check for extreme fund parameters
+  funds.forEach(f => {
+    if (f.mean < -5 || f.mean > 50) {
+      warnings.push(`Fund "${f.name}" has extreme expected return (${f.mean}%)`);
+    }
+    if (f.std < 1 || f.std > 100) {
+      warnings.push(`Fund "${f.name}" has extreme volatility (${f.std}%)`);
+    }
+    if (f.weight < 0 || f.weight > 100) {
+      errors.push(`Fund "${f.name}" has invalid weight (${f.weight}%)`);
+    }
+  });
+  
+  // Tax and inflation validation
+  const ltcg = v('sl-ltcg');
+  const infl = v('sl-infl');
+  if (ltcg < 0 || ltcg > 50) warnings.push('LTCG Rate seems extreme');
+  if (infl < -5 || infl > 25) warnings.push('Inflation Rate seems extreme');
+  
+  // Update validation state
+  validationState.errors = errors;
+  validationState.warnings = warnings;
+  validationState.isValid = errors.length === 0;
+  validationState.hasWarnings = warnings.length > 0;
+  
+  return validationState;
+}
+
+function updateValidationDisplay() {
+  const state = validateInputs();
+  const wrap = document.getElementById('validation-wrap');
+  const fill = document.getElementById('validation-fill');
+  const status = document.getElementById('validation-status');
+  const errorDisplay = document.getElementById('error-display');
+  const warningDisplay = document.getElementById('warning-display');
+  const successDisplay = document.getElementById('success-display');
+  const errorMsg = document.getElementById('error-message');
+  const warningMsg = document.getElementById('warning-message');
+  const successMsg = document.getElementById('success-message');
+  
+  wrap.classList.add('visible');
+  
+  if (!state.isValid) {
+    // Error state
+    fill.style.width = '100%';
+    fill.style.background = 'var(--red)';
+    status.textContent = 'Invalid';
+    status.style.color = 'var(--red)';
+    
+    errorMsg.innerHTML = state.errors.map(e => `• ${e}`).join('<br>');
+    errorDisplay.classList.add('visible');
+    warningDisplay.classList.remove('visible');
+    successDisplay.classList.remove('visible');
+  } else if (state.hasWarnings) {
+    // Warning state
+    fill.style.width = '70%';
+    fill.style.background = 'var(--amber)';
+    status.textContent = 'Warning';
+    status.style.color = 'var(--amber)';
+    
+    warningMsg.innerHTML = state.warnings.map(w => `• ${w}`).join('<br>');
+    warningDisplay.classList.add('visible');
+    errorDisplay.classList.remove('visible');
+    successDisplay.classList.remove('visible');
+  } else {
+    // Success state
+    fill.style.width = '100%';
+    fill.style.background = 'var(--green)';
+    status.textContent = 'Valid';
+    status.style.color = 'var(--green)';
+    
+    successDisplay.classList.add('visible');
+    errorDisplay.classList.remove('visible');
+    warningDisplay.classList.remove('visible');
+  }
+  
+  // Update button state
+  const btn = document.getElementById('btn-run');
+  if (btn) {
+    btn.disabled = !state.isValid;
+    if (!state.isValid) {
+      btn.title = 'Fix validation errors before running';
+    } else {
+      btn.title = 'Run Simulation';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function syncLabel(key, val, fmt) {
+  const el = document.getElementById('lbl-'+key);
+  if (el) el.textContent = fmt ? fmt(val) : val;
+}
+
+function syncSlider(key, val) {
+  const slider = document.getElementById('sl-' + key);
+  if (slider) {
+    slider.value = val;
+  }
+}
+
+function syncInput(key, val) {
+  const input = document.getElementById('in-' + key);
+  if (input) {
+    input.value = val;
+  }
+}
+
+function updateHeader() {
+  const sip = v('sl-sip')*1000;
+  const wcm = v('sl-wcm')*1000;
+  document.getElementById('hdr-out').textContent = '₹'+(( sip+wcm)/1000).toFixed(0)+'K';
+  updateMu();
+  updateWeightBar();
+}
+
+function updateMu() {
+  const mu = funds.reduce((s,f)=>s+(f.weight/100)*(f.mean/100),0)*100;
+  const el = document.getElementById('hdr-mu');
+  if (el) el.textContent = isNaN(mu) ? '—' : mu.toFixed(2)+'%';
+}
+
+function updateWeightBar() {
+  const total = funds.reduce((s,f)=>s+f.weight,0);
+  const fill  = document.getElementById('wt-fill');
+  const label = document.getElementById('wt-total');
+  const hdr   = document.getElementById('hdr-wt');
+  const pct   = Math.min(total, 100);
+  if (fill)  { fill.style.width = pct+'%'; fill.style.background = Math.abs(total-100)<1?'var(--green)':total>100?'var(--red)':'var(--yellow)'; }
+  if (label) { label.textContent = total+'%'; label.style.color = Math.abs(total-100)<1?'var(--green)':total>100?'var(--red)':'var(--yellow)'; }
+  if (hdr)   { hdr.textContent = total+'%'; hdr.style.color = Math.abs(total-100)<1?'var(--amber)':total>100?'var(--red)':'var(--yellow)'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FUND MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+function renderFunds() {
+  const list = document.getElementById('fund-list');
+  list.innerHTML = '';
+  funds.forEach((f, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const div = document.createElement('div');
+    div.className = 'fund-card';
+    div.id = 'fc-'+f.id;
+    div.innerHTML = `
+      <div class="fund-card-head" onclick="toggleFund(${f.id})">
+        <div class="fund-dot" style="background:${color}"></div>
+        <input class="fund-name-input" value="${f.name}"
+          onclick="event.stopPropagation()"
+          onchange="updateFundName(${f.id},this.value)"
+          title="Click to rename">
+        <div class="fund-head-right">
+          <span class="fund-weight-badge">${f.weight}%</span>
+          <span class="fund-toggle">▾</span>
+        </div>
+      </div>
+      <div class="fund-body">
+        <div class="field" style="padding:4px 0">
+          <div class="field-label">
+            <span>Weight %</span>
+            <span class="field-value" id="lbl-fw-${f.id}">${f.weight}%</span>
+          </div>
+          <div class="field-input-row">
+            <input type="range" min="1" max="80" step="1" value="${f.weight}"
+              oninput="updateFund(${f.id},'weight',+this.value);syncInput('fw-${f.id}',this.value)">
+            <input type="number" id="in-fw-${f.id}" min="1" max="80" step="1" value="${f.weight}"
+              oninput="syncSlider('fw-${f.id}',this.value);updateFund(${f.id},'weight',+this.value)">
+          </div>
+        </div>
+        <div class="field" style="padding:4px 0">
+          <div class="field-label">
+            <span>Expected Return %</span>
+            <span class="field-value" id="lbl-fm-${f.id}">${f.mean}%</span>
+          </div>
+          <div class="field-input-row">
+            <input type="range" min="5" max="35" step="0.5" value="${f.mean}"
+              oninput="updateFund(${f.id},'mean',+this.value);syncInput('fm-${f.id}',this.value)">
+            <input type="number" id="in-fm-${f.id}" min="5" max="35" step="0.5" value="${f.mean}"
+              oninput="syncSlider('fm-${f.id}',this.value);updateFund(${f.id},'mean',+this.value)">
+          </div>
+        </div>
+        <div class="field" style="padding:4px 0">
+          <div class="field-label">
+            <span>Volatility (Std Dev) %</span>
+            <span class="field-value" id="lbl-fs-${f.id}">${f.std}%</span>
+          </div>
+          <div class="field-input-row">
+            <input type="range" min="5" max="65" step="1" value="${f.std}"
+              oninput="updateFund(${f.id},'std',+this.value);syncInput('fs-${f.id}',this.value)">
+            <input type="number" id="in-fs-${f.id}" min="5" max="65" step="1" value="${f.std}"
+              oninput="syncSlider('fs-${f.id}',this.value);updateFund(${f.id},'std',+this.value)">
+          </div>
+        </div>
+        ${funds.length > 1 ? `<button class="fund-del" onclick="removeFund(${f.id})">✕ Remove Fund</button>` : ''}
+      </div>`;
+    list.appendChild(div);
+  });
+  updateWeightBar();
+  updateMu();
+}
+
+function toggleFund(id) {
+  document.getElementById('fc-'+id).classList.toggle('open');
+}
+
+function updateFund(id, key, val) {
+  const f = funds.find(x=>x.id===id);
+  if (!f) return;
+  f[key] = val;
+  const badge = document.querySelector('#fc-'+id+' .fund-weight-badge');
+  if (badge && key==='weight') badge.textContent = val+'%';
+  const lbl = document.getElementById('lbl-f'+key[0]+'-'+id);
+  if (lbl) lbl.textContent = val+(key==='weight'?'%':key==='mean'?'%':'%');
+  updateWeightBar();
+  updateMu();
+}
+
+function updateFundName(id, name) {
+  const f = funds.find(x=>x.id===id);
+  if (f) f.name = name;
+}
+
+function addFund() {
+  funds.push({ id: nextId++, name: 'New Fund '+(nextId-1), weight: 10, mean: 14.0, std: 25.0 });
+  renderFunds();
+  const card = document.getElementById('fc-'+(nextId-1));
+  if (card) { card.classList.add('open'); card.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+function removeFund(id) {
+  if (funds.length <= 1) return;
+  funds = funds.filter(f=>f.id!==id);
+  renderFunds();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MATH
+// ═══════════════════════════════════════════════════════════
+function cholesky(C) {
+  const n = C.length;
+  const L = Array.from({length:n},()=>new Float64Array(n));
+  for (let i=0;i<n;i++) {
+    for (let j=0;j<=i;j++) {
+      let s=0; for (let k=0;k<j;k++) s+=L[i][k]*L[j][k];
+      L[i][j] = i===j ? Math.sqrt(Math.max(0,C[i][i]-s)) : (C[i][j]-s)/(L[j][j]||1e-12);
+    }
+  }
+  return L;
+}
+
+// Seeded RNG — Mulberry32
+function mulberry32(seed) {
+  let t = seed|0;
+  return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; };
+}
+
+function boxMuller(rng) {
+  let u,v;
+  do { u=rng(); } while(!u);
+  do { v=rng(); } while(!v);
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function pct(arr, p) {
+  const s=[...arr].sort((a,b)=>a-b);
+  return s[Math.max(0,Math.floor(p/100*(s.length-1)))];
+}
+function mean(arr) { return arr.reduce((a,x)=>a+x,0)/arr.length; }
+function std(arr)  { const m=mean(arr); return Math.sqrt(arr.reduce((a,x)=>a+(x-m)**2,0)/arr.length); }
+
+// ═══════════════════════════════════════════════════════════
+//  SIMULATION CORE  (chunked with requestAnimationFrame)
+// ═══════════════════════════════════════════════════════════
+async function runMonteCarlo(cfg, onProgress) {
+  const {
+    numSims, simYears, currentAge, seed,
+    startCorpus, wcInit,
+    baseSip, stepup, stepupM,
+    wcMonthly, wcPark, wcCool,
+    d5, d10, d20, d30,
+    ltcg, exempt, infl,
+    targetCorpus, targetAge,
+  } = cfg;
+
+  // Validate simulation years
+  const calculatedYears = targetAge - currentAge;
+  if (simYears !== calculatedYears) {
+    console.warn(`Simulation years (${simYears}) doesn't match calculated years (${calculatedYears}). Using calculated value.`);
+  }
+
+  const n = funds.length;
+  const weights     = funds.map(f=>f.weight/100);
+  const monthlyMu   = funds.map(f=>f.mean/100/12);
+  const monthlySig  = funds.map(f=>f.std/100/Math.sqrt(12));
+
+  // Covariance
+  const corr = getCorr(n);
+  const cov  = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>corr[i][j]*monthlySig[i]*monthlySig[j]));
+  const L    = cholesky(cov);
+
+  const totalM = calculatedYears*12;
+  const deployMap = [[.30,d30/100],[.20,d20/100],[.10,d10/100],[.05,d5/100]];
+  const milestoneMonths = calculateMilestoneMonths(currentAge, targetAge, calculatedYears);
+
+  const snap = {}; milestoneMonths.forEach(m=>snap[m]=[]);
+  const PATHS = Math.min(300, numSims);
+  const pathM = [];
+
+  const rng = mulberry32(seed);
+  const CHUNK = 200;
+
+  for (let sStart=0; sStart<numSims; sStart+=CHUNK) {
+    const sEnd = Math.min(sStart+CHUNK, numSims);
+    for (let s=sStart; s<sEnd; s++) {
+      let corpus = startCorpus, wc = wcInit, sip = baseSip, lastDep = -999;
+      const hist = [corpus];
+
+      for (let m=1; m<=totalM; m++) {
+        if (m>1 && (m-1)%stepupM===0) sip*=(1+stepup/100);
+
+        // Correlated returns
+        const z = Array.from({length:n},()=>boxMuller(rng));
+        let blend=0;
+        for (let i=0;i<n;i++) {
+          let c=0; for(let j=0;j<=i;j++) c+=L[i][j]*z[j];
+          blend += weights[i]*(monthlyMu[i]+c);
+        }
+        corpus = corpus*(1+blend)+sip;
+        wc = wc*(1+wcPark/100/12)+wcMonthly;
+
+        // Drawdown
+        const lo = Math.max(0, m-18);
+        let peak = 0; for(let k=lo;k<m;k++) if(hist[k]>peak) peak=hist[k];
+        const dd = peak>0 ? (peak-hist[m-1])/peak : 0;
+
+        if (m-lastDep>wcCool) {
+          let frac=0;
+          for (const [thr,f] of deployMap) { if(dd>=thr){frac=f;break;} }
+          if (frac>0) { const a=wc*frac; corpus+=a; wc-=a; lastDep=m; }
+        }
+        hist.push(corpus);
+        if (snap[m]!==undefined) snap[m].push(corpus + wc*(m/totalM));
+      }
+      if (s<PATHS) pathM.push(hist.slice());
+    }
+    onProgress(sEnd/numSims, `Running ${sEnd.toLocaleString()} / ${numSims.toLocaleString()} simulations…`);
+    await new Promise(r=>setTimeout(r,0));
+  }
+
+  // Fan chart data (every 3 months)
+  const step=3;
+  const fan={age:[],p5:[],p25:[],p50:[],p75:[],p95:[]};
+  for (let m=0;m<=totalM;m+=step) {
+    fan.age.push(currentAge+m/12);
+    const col = pathM.map(p=>p[m]);
+    fan.p5.push(pct(col,5)/1e7);  fan.p25.push(pct(col,25)/1e7);
+    fan.p50.push(pct(col,50)/1e7);fan.p75.push(pct(col,75)/1e7);
+    fan.p95.push(pct(col,95)/1e7);
+  }
+
+  // Histogram at target age
+  const tgtM = Math.min((targetAge-currentAge)*12, totalM);
+  const tgtSnap = snap[tgtM] || snap[milestoneMonths[milestoneMonths.length-1]];
+  const p98v = pct(tgtSnap, 98);
+  const BINS=50, bw=p98v/BINS;
+  const histData=Array.from({length:BINS},(_, i)=>({
+    x: ((i+.5)*bw/1e7).toFixed(2),
+    count: tgtSnap.filter(x=>x>=i*bw&&x<(i+1)*bw).length,
+    val:(i+.5)*bw
+  }));
+
+  // Prob curve
+  const probCurve=[];
+  const milestoneAges = milestoneMonths.map(m => Math.round(currentAge + m/12));
+  
+  // Get simulation data for each milestone
+  const sMilestones = milestoneMonths.map(m => snap[m] || []);
+  
+  // Extend target range to cover more scenarios (up to ₹50Cr)
+  for(let t=1;t<=50;t++) {
+    const milestoneProbs = sMilestones.map((snapData, idx) => {
+      const age = milestoneAges[idx];
+      const prob = snapData.length > 0 
+        ? +(snapData.filter(x=>x>=t*1e7).length/snapData.length*100).toFixed(1)
+        : 0;
+      return { age, prob };
+    });
+    
+    probCurve.push({
+      t,
+      milestones: milestoneProbs
+    });
+  }
+
+  // Cost basis
+  function costBasis(years) {
+    let s=baseSip, tot=startCorpus;
+    for(let m=1;m<=years*12;m++){ if(m>1&&(m-1)%stepupM===0)s*=(1+stepup/100); tot+=s; }
+    return tot;
+  }
+  function afterTax(gross,yr) {
+    const g=Math.max(0,gross-costBasis(yr));
+    return gross-Math.max(0,g/15-exempt)*(ltcg/100)*15;
+  }
+  function realVal(gross,yr) { return afterTax(gross,yr)/(1+infl/100)**yr; }
+
+  // Milestone stats
+  const msData = milestoneMonths.map((m,i)=>{
+    const milestoneAge = Math.round(currentAge + [0.2, 0.5, 0.8, 1.0][i] * (targetAge - currentAge));
+    const a = milestoneAge;
+    const yr = a - currentAge;
+    const arr = snap[m];
+    const s50 = pct(arr,50);
+    return {
+      age:a,yr,
+      p5:pct(arr,5),p10:pct(arr,10),p25:pct(arr,25),p50:s50,
+      p75:pct(arr,75),p90:pct(arr,90),p95:pct(arr,95),
+      mean:mean(arr),std:std(arr),
+      afterTax:afterTax(s50,yr),
+      real:realVal(s50,yr),
+      probTgt:arr.filter(x=>x>=targetCorpus).length/arr.length*100
+    };
+  });
+
+  // Dist brackets
+  const brackets=[
+    [0,    3e7,  '< ₹3Cr',    '#f03d5e'],
+    [3e7,  5e7,  '₹3–5Cr',   '#f07830'],
+    [5e7,  7e7,  '₹5–7Cr',   '#e8c030'],
+    [7e7,  9e7,  '₹7–9Cr',   '#10c98f'],
+    [9e7,  12e7, '₹9–12Cr',  '#10b8c9'],
+    [12e7, 1e15, '> ₹12Cr',  '#8b6af0'],
+  ].map(([lo,hi,lbl,col])=>({
+    lbl,col,
+    pct:(tgtSnap.filter(x=>x>=lo&&x<hi).length/tgtSnap.length*100)
+  }));
+
+  const blendedMu = funds.reduce((s,f)=>s+(f.weight/100)*(f.mean/100),0)*100;
+
+  return { fan, histData, probCurve, msData, brackets, snap, blendedMu, tgtM, cfg };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER RESULTS
+// ═══════════════════════════════════════════════════════════
+function destroyCharts() {
+  Object.values(charts).forEach(c=>{ try{c.destroy();}catch(e){} });
+  charts={};
+}
+
+function renderResults(R) {
+  destroyCharts();
+  const { fan, histData, probCurve, msData, brackets, snap, blendedMu, tgtM, cfg } = R;
+  const { targetCorpus, targetAge } = cfg;
+
+  const t43 = msData[2] || msData[msData.length-1];
+  const t45 = msData[3] || t43;
+
+  const main = document.getElementById('main-panel');
+  main.innerHTML = '';
+
+  const probTargets = [5,6,7,8,9,10,12,15,20];
+
+  // ── KPI ROW ──
+  const kpis=[
+    {lbl:'Median @ 43',    val:crS(t43.p50), sub:'Most likely outcome', col:'--amber',   ac:'--amber'},
+    {lbl:'Median @ 45',    val:crS(t45.p50), sub:'2 more years',        col:'--green',   ac:'--green'},
+    {lbl:`P(≥₹${targetCorpus/1e7|0}Cr) @${targetAge}`,
+                           val:t43.probTgt.toFixed(1)+'%',
+                           sub:'Primary target',
+                           col: t43.probTgt>50?'--green':t43.probTgt>30?'--amber':'--red',
+                           ac: t43.probTgt>50?'--green':t43.probTgt>30?'--amber':'--red'},
+    {lbl:`P(≥₹${targetCorpus/1e7|0}Cr) @45`,
+                           val:t45.probTgt.toFixed(1)+'%',
+                           sub:'+2 yrs uplift',
+                           col: t45.probTgt>50?'--green':'--blue',
+                           ac: t45.probTgt>50?'--green':'--blue'},
+    {lbl:'Blended μ',      val:blendedMu.toFixed(2)+'%', sub:'Exp. annual return', col:'--blue2',  ac:'--blue'},
+    {lbl:'Worst 5%',       val:crS(t43.p5),  sub:'@ age 43 floor',      col:'--red',     ac:'--red'},
+  ];
+
+  const kpiRow = document.createElement('div');
+  kpiRow.className='kpi-row';
+  kpis.forEach(k=>{
+    kpiRow.innerHTML+=`<div class="kpi-card" style="--accent:var(${k.ac})">
+      <div class="lbl">${k.lbl}</div>
+      <div class="val" style="color:var(${k.col})">${k.val}</div>
+      <div class="sub">${k.sub}</div>
+    </div>`;
+  });
+  main.appendChild(kpiRow);
+
+  // ── FAN CHART ──
+  const fanPanel = document.createElement('div');
+  fanPanel.className='panel chart-fan-container';
+  fanPanel.innerHTML=`<div class="panel-title">Portfolio Growth — Percentile Fan (${cfg.numSims.toLocaleString()} simulations)</div>
+    <canvas id="chart-fan" height="280"></canvas>`;
+  main.appendChild(fanPanel);
+
+  // ── CHARTS ROW (histogram + prob) ──
+  const cr2 = document.createElement('div');
+  cr2.className='charts-row';
+  cr2.innerHTML=`
+    <div class="panel chart-hist-container">
+      <div class="panel-title">Corpus Distribution @ Age ${targetAge}</div>
+      <canvas id="chart-hist" height="240"></canvas>
+    </div>
+    <div class="panel chart-prob-container">
+      <div class="panel-title">Probability of Reaching Target by Age</div>
+      <canvas id="chart-prob" height="240"></canvas>
+    </div>`;
+  main.appendChild(cr2);
+
+  // ── MILESTONE TABLE ──
+  const msPanel = document.createElement('div');
+  msPanel.className='panel chart-container';
+  msPanel.innerHTML=`<div class="panel-title">Milestone Percentile Table</div>
+    <div style="overflow-x:auto">
+    <table class="ms-table">
+      <thead><tr>
+        <th>Age</th><th>5th%</th><th>25th%</th>
+        <th style="color:var(--amber)">Median ★</th>
+        <th>75th%</th><th>95th%</th><th>Mean</th>
+        <th>After Tax</th><th>Real (₹Today)</th>
+        <th>P(≥₹${targetCorpus/1e7|0}Cr)</th>
+      </tr></thead>
+      <tbody>
+        ${msData.map((s,i)=>`<tr>
+          <td style="color:var(--amber)">${s.age}</td>
+          <td style="color:var(--red)">${cr(s.p5)}</td>
+          <td style="color:var(--orange)">${cr(s.p25)}</td>
+          <td style="color:var(--amber);font-weight:700">${cr(s.p50)}</td>
+          <td style="color:var(--blue2)">${cr(s.p75)}</td>
+          <td style="color:var(--green)">${cr(s.p95)}</td>
+          <td>${cr(s.mean)}</td>
+          <td style="color:var(--green)">${cr(s.afterTax)}</td>
+          <td style="color:var(--purple)">${cr(s.real)}</td>
+          <td style="color:${s.probTgt>50?'var(--green)':s.probTgt>30?'var(--amber)':'var(--red)'};font-weight:700">${s.probTgt.toFixed(1)}%</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  main.appendChild(msPanel);
+
+  // ── BOTTOM ROW ──
+  const botRow = document.createElement('div');
+  botRow.className='bot-row';
+
+  // Prob table
+  const ptHtml = `<div class="panel chart-container">
+    <div class="panel-title">Probability of Hitting Targets</div>
+    <div style="overflow-x:auto; max-height: 200px;">
+    <table class="prob-table">
+      <thead><tr><th>Target</th>${probCurve[0]?.milestones.map(m => `<th>Age ${m.age}</th>`).join('') || ''}</tr></thead>
+      <tbody>${probTargets.map(t=>{
+        const targetData = probCurve.find(p => p.t === t);
+        const milestoneProbs = targetData ? targetData.milestones : [];
+        
+        const isTgt=Math.abs(t-targetCorpus/1e7)<.5;
+        return `<tr style="${isTgt?'background:rgba(240,165,0,.07)':''}">
+          <td style="${isTgt?'color:var(--amber);font-weight:700':''}">₹${t}Cr${isTgt?' ←':''}</td>
+          ${milestoneProbs.map((milestone, idx) => {
+            const prob = milestone.prob;
+            const age = milestone.age;
+            const c = idx === 0 ? 'var(--muted2)' : 
+                       idx === 1 ? (prob>50?'var(--green)':prob>30?'var(--amber)':'var(--red)') :
+                       'var(--blue2)';
+            const fontWeight = idx === 1 ? '600' : 'normal';
+            return `<td style="color:${c};font-weight:${fontWeight}">${prob}%</td>`;
+          }).join('')}
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+
+  // Distribution
+  const distHtml = `<div class="panel chart-container">
+    <div class="panel-title">Outcome Distribution @ Age ${targetAge}</div>
+    <div style="overflow-x:auto; max-height: 200px;">
+    ${brackets.map(b=>`<div class="dist-item">
+      <div class="dist-row">
+        <span class="dist-label">${b.lbl}</span>
+        <span class="dist-pct" style="color:${b.col}">${b.pct.toFixed(1)}%</span>
+      </div>
+      <div class="dist-track">
+        <div class="dist-fill" style="width:0%;background:${b.col}" data-w="${b.pct.toFixed(1)}"></div>
+      </div>
+    </div>`).join('')}
+    </div>
+  </div>`;
+
+  // Downside
+  const dsHtml = `<div class="panel chart-container">
+    <div class="panel-title">Downside Risk & Floor Analysis</div>
+    <div style="overflow-x:auto; max-height: 200px;">
+    ${[2,3,4,5,6].map(t=>{
+      const milestoneData = probCurve[0]?.milestones[1]?.age === 43 ? probCurve.find(p => p.t === t)?.milestones[1] : null;
+      const p = milestoneData ? milestoneData.prob.toFixed(1) : '0.0';
+      const c=+p>20?'var(--red)':+p>10?'var(--orange)':'var(--green)';
+      return `<div class="ds-row">
+        <span class="ds-label">P(corpus < ₹${t}Cr @ 43)</span>
+        <span class="ds-val" style="color:${c}">${p}%</span>
+      </div>`;
+    }).join('')}
+    <div style="height:12px"></div>
+    ${['p5','p10','p25'].map((k,i)=>`<div class="ds-row">
+      <span class="ds-label">Worst ${['5%','10%','25%'][i]} floor @ 43</span>
+      <span class="ds-val" style="color:var(--amber)">${crS(t43[k])}</span>
+    </div>`).join('')}
+    </div>
+  </div>`;
+
+  botRow.innerHTML = ptHtml + distHtml + dsHtml;
+  main.appendChild(botRow);
+
+  // Disclaimer
+  const disc = document.createElement('div');
+  disc.className='disclaimer';
+  disc.textContent='⚠ DISCLAIMER: For educational purposes only. Returns modelled as correlated normal distribution — actual small cap returns exhibit fat tails; true downside risk may be marginally higher in extreme black swan events. Tax calculations based on LTCG rules post Budget 2024. This does not constitute SEBI-registered investment advice. Consult a SEBI-registered investment adviser and qualified CA for guidance.';
+  main.appendChild(disc);
+
+  // ── NOW BUILD CHARTS ──
+  Chart.defaults.color = '#4a5280';
+  Chart.defaults.borderColor = '#1e2340';
+
+  const gridOpts = { color:'rgba(30,35,64,.8)', lineWidth:1 };
+  const tickOpts = { color:'#4a5280', font:{family:'JetBrains Mono',size:9} };
+  const baseOpts = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:600},
+    plugins:{ legend:{ labels:{ color:'#6b75a8', font:{family:'JetBrains Mono',size:9}, boxWidth:12, padding:12 }}},
+  };
+
+  // Fan chart
+  const fanCtx = document.getElementById('chart-fan').getContext('2d');
+  charts.fan = new Chart(fanCtx,{
+    type:'line',
+    data:{ labels: fan.age.map(a=>a.toFixed(1)),
+      datasets:[
+        { label:'Best 95th', data:fan.p95, borderColor:'#10c98f', borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false },
+        { label:'Good 75th', data:fan.p75, borderColor:'#3d8ef0', borderWidth:1.5, pointRadius:0,
+          fill:{target:'+1', above:'rgba(61,142,240,.07)'} },
+        { label:'Median ★',  data:fan.p50, borderColor:'#f0a500', borderWidth:2.5, pointRadius:0,
+          fill:{target:'+1', above:'rgba(240,165,0,.1)'} },
+        { label:'Bad 25th',  data:fan.p25, borderColor:'#6b75a8', borderWidth:1, pointRadius:0,
+          fill:{target:'+1', above:'rgba(107,117,168,.05)'} },
+        { label:'Worst 5th', data:fan.p5,  borderColor:'#f03d5e', borderWidth:1, borderDash:[4,3], pointRadius:0, fill:false },
+      ]
+    },
+    options:{ ...baseOpts,
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:10, right:15, bottom:20, left:10 } },
+      plugins:{ ...baseOpts.plugins,
+        annotation:{ annotations:{
+          target:{ type:'line', yMin:targetCorpus/1e7, yMax:targetCorpus/1e7,
+            borderColor:'rgba(240,165,0,.4)', borderWidth:1.5, borderDash:[6,3],
+            label:{ content:`Target ₹${targetCorpus/1e7|0}Cr`, enabled:true,
+              color:'#f0a500', font:{size:9,family:'JetBrains Mono'}, position:'end' }}
+        }}
+      },
+      scales:{
+        x:{ 
+          grid:gridOpts, 
+          ticks:{ ...tickOpts, maxTicksLimit:12, autoSkip:false },
+          title:{ display:true, text:'Age', color:'#4a5280', font:{size:9} }
+        },
+        y:{ 
+          grid:gridOpts, 
+          ticks:{ ...tickOpts, callback:v=>'₹'+v.toFixed(0)+'Cr' }, 
+          title:{ display:true, text:'₹ Crore', color:'#4a5280', font:{size:9} }
+        }
+      }
+    }
+  });
+
+  // Histogram
+  const binColors = histData.map(h=>{
+    const v=h.val;
+    if(v<3e7)   return 'rgba(240,61,94,.7)';
+    if(v<5e7)   return 'rgba(240,120,48,.7)';
+    if(v<7e7)   return 'rgba(232,192,48,.7)';
+    if(v<9e7)   return 'rgba(16,201,143,.7)';
+    if(v<12e7)  return 'rgba(16,184,201,.7)';
+    return                'rgba(139,106,240,.7)';
+  });
+  const histCtx = document.getElementById('chart-hist').getContext('2d');
+  charts.hist = new Chart(histCtx,{
+    type:'bar',
+    data:{ labels:histData.map(h=>'₹'+h.x+'Cr'), datasets:[{
+      label:'Simulations', data:histData.map(h=>h.count),
+      backgroundColor:binColors, borderWidth:0, borderRadius:2,
+    }]},
+    options:{ ...baseOpts,
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:10, right:15, bottom:20, left:10 } },
+      plugins:{ ...baseOpts.plugins,
+        annotation:{ annotations:{ t:{ type:'line',
+          xMin:'₹'+(targetCorpus/1e7).toFixed(2)+'Cr',
+          xMax:'₹'+(targetCorpus/1e7).toFixed(2)+'Cr',
+          borderColor:'rgba(240,165,0,.5)', borderWidth:1.5, borderDash:[4,2] }}}
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{ ...tickOpts, maxRotation:45, maxTicksLimit:10 } },
+        y:{ grid:gridOpts, ticks:tickOpts, title:{ display:true, text:'# Simulations', color:'#4a5280', font:{size:9} } }
+      }
+    }
+  });
+
+  // Prob curve
+  const probCtx = document.getElementById('chart-prob').getContext('2d');
+  
+  // Create datasets for each milestone age
+  const milestoneDatasets = probCurve[0]?.milestones.map((milestone, idx) => ({
+    label: `Age ${milestone.age}`,
+    data: probCurve.map(p => p.milestones[idx]?.prob || 0),
+    borderColor: ['#4a5280', '#3d8ef0', '#10c98f', '#f0a500'][idx % 4],
+    borderWidth: idx === 0 ? 1.5 : 2.5,
+    pointRadius: 0,
+    fill: false
+  })) || [];
+  
+  charts.prob = new Chart(probCtx,{
+    type:'line',
+    data:{ labels:probCurve.map(p=>'₹'+p.t+'Cr'),
+      datasets: milestoneDatasets
+    },
+    options:{ ...baseOpts,
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:10, right:15, bottom:20, left:10 } },
+      scales:{
+        x:{ grid:gridOpts, ticks:{ ...tickOpts, maxTicksLimit:12 } },
+        y:{ grid:gridOpts, ticks:{ ...tickOpts, callback:v=>v+'%' }, min:0, max:100,
+            title:{ display:true, text:'Probability %', color:'#4a5280', font:{size:9} } }
+      }
+    }
+  });
+
+  // Animate dist bars after DOM settles
+  setTimeout(()=>{
+    document.querySelectorAll('.dist-fill').forEach(el=>{
+      el.style.width = el.dataset.w+'%';
+    });
+  }, 100);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════════════
+async function startSimulation() {
+  const total = funds.reduce((s,f)=>s+f.weight,0);
+  if (Math.abs(total-100)>1) {
+    alert(`Fund weights sum to ${total}%. They must sum to 100% before running.`);
+    return;
+  }
+  if (simRunning) return;
+  simRunning = true;
+
+  const btn = document.getElementById('btn-run');
+  btn.classList.add('running'); btn.disabled=true;
+  const pw = document.getElementById('progress-wrap');
+  const pf = document.getElementById('progress-fill');
+  const pl = document.getElementById('progress-label');
+  pw.classList.add('visible'); pf.style.width='0%';
+
+  const cfg = {
+    numSims:    v('sl-sims'),
+    simYears:   v('sl-years'),
+    currentAge: v('sl-age'),
+    seed:       v('sl-seed'),
+    startCorpus:v('sl-corpus')*100000,
+    wcInit:     v('sl-wci')*100000,
+    baseSip:    v('sl-sip')*1000,
+    stepup:     v('sl-stepup'),
+    stepupM:    v('sl-stepm'),
+    wcMonthly:  v('sl-wcm')*1000,
+    wcPark:     v('sl-wcp'),
+    wcCool:     v('sl-wcc'),
+    d5:         v('sl-d5'),
+    d10:        v('sl-d10'),
+    d20:        v('sl-d20'),
+    d30:        v('sl-d30'),
+    ltcg:       v('sl-ltcg'),
+    exempt:     v('sl-exempt')*1000,
+    infl:       v('sl-infl'),
+    targetCorpus: v('sl-tgt')*1e7,
+    targetAge:    v('sl-tage'),
+  };
+
+  try {
+    const R = await runMonteCarlo(cfg, (progress, msg)=>{
+      pf.style.width = (progress*100).toFixed(0)+'%';
+      pl.textContent = msg;
+    });
+    renderResults(R);
+    document.getElementById('topbar-meta').textContent =
+      `${cfg.numSims.toLocaleString()} sims · ${R.blendedMu.toFixed(2)}% blended μ · ${funds.length} funds`;
+  } catch(e) {
+    console.error(e);
+    alert('Simulation error: '+e.message);
+  } finally {
+    simRunning=false;
+    btn.classList.remove('running'); btn.disabled=false;
+    pw.classList.remove('visible');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+renderFunds();
+updateHeader();
+  // Trigger all label syncs on load
+  document.querySelectorAll('input[type=range]').forEach(el=>{
+    el.dispatchEvent(new Event('input'));
+  });
+  
+  // Initial validation check
+  updateValidationDisplay();
+  
+  // Add validation listeners to all inputs
+  document.querySelectorAll('input[type=range], input[type=text]').forEach(el=>{
+    el.addEventListener('input', updateValidationDisplay);
+    el.addEventListener('change', updateValidationDisplay);
+  });
+  
+  // Add validation listeners to fund inputs
+  document.getElementById('fund-list').addEventListener('input', updateValidationDisplay);
+  document.getElementById('fund-list').addEventListener('change', updateValidationDisplay);
+</script>
+</body>
+</html>
